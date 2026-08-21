@@ -18,8 +18,9 @@ def _load_secrets():
     rebuild both from the app's secrets before anything touches Google APIs."""
     try:
         secrets = st.secrets
-    except FileNotFoundError:
-        return  # running locally against .env
+        _ = "GOOGLE_API_KEY" in secrets  # forces the parse, so a missing file fails here
+    except Exception:  # noqa: BLE001 - no secrets file at all (Cloud Run, or local .env)
+        return
 
     for key in ("GOOGLE_API_KEY", "INVENTORY_SHEET_ID"):
         if key in secrets:
