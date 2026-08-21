@@ -56,6 +56,21 @@ def ask(question: str) -> str:
     return asyncio.run(get_chat().ask(question))
 
 
+def _friendly_error(error: Exception) -> str:
+    """Say what actually went wrong. A quota trip is not a data problem, and
+    telling the user the data is unreachable sends them looking in the wrong
+    place."""
+    text = str(error)
+    if "RESOURCE_EXHAUSTED" in text or "429" in text:
+        return (
+            "I've hit the free-tier rate limit on the model for the moment. "
+            "Give it a minute and ask again."
+        )
+    if "PERMISSION_DENIED" in text or "403" in text:
+        return "I don't have access to the data source right now."
+    return "Something went wrong on my side. Try again in a moment."
+
+
 def sheet_url():
     return f"https://docs.google.com/spreadsheets/d/{os.environ.get('INVENTORY_SHEET_ID', '')}"
 
@@ -106,7 +121,7 @@ with chat_col:
                         if proposal not in st.session_state.pending:
                             st.session_state.pending.append(proposal)
                 except Exception as error:  # noqa: BLE001
-                    reply = "I couldn't reach the inventory sheet just now. Try again in a moment."
+                    reply = _friendly_error(error)
                     st.caption(f"({type(error).__name__})")
             st.markdown(reply)
 
