@@ -1,0 +1,5 @@
+.venv/
+.env
+.secrets/
+__pycache__/
+setup_sheet.py
