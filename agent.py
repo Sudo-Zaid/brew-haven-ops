@@ -4,7 +4,9 @@ It watches the inventory sheet and proposes restocks. It cannot write to the
 sheet itself - every change goes through a human.
 """
 
+import asyncio
 import os
+import re
 import uuid
 
 from dotenv import load_dotenv
@@ -19,7 +21,7 @@ load_dotenv()
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "0")
 
 APP_NAME = "brew_haven_ops"
-MODEL = "gemini-3.6-flash"
+MODEL = "gemini-3.1-flash-lite"
 
 INSTRUCTION = """
 You are Ops, the operations assistant for Brew Haven, a coffee shop with
@@ -75,8 +77,20 @@ class OpsChat:
             )
             self._started = True
 
-    async def ask(self, message: str) -> str:
-        """Run one turn, collecting any restock proposals the agent made."""
+    async def ask(self, message: str, _retries: int = 1) -> str:
+        """One turn. The free tier meters requests and input tokens, so a busy
+        turn can trip a 429 that clears on its own - wait it out once."""
+        try:
+            return await self._ask_once(message)
+        except Exception as error:  # noqa: BLE001
+            text = str(error)
+            if _retries > 0 and "RESOURCE_EXHAUSTED" in text:
+                delay = re.search(r"retry in ([0-9.]+)s", text, re.I)
+                await asyncio.sleep(min(float(delay.group(1)) + 2 if delay else 30, 65))
+                return await self.ask(message, _retries - 1)
+            raise
+
+    async def _ask_once(self, message: str) -> str:
         await self._ensure_session()
         self.last_proposals = []
         content = types.Content(role="user", parts=[types.Part(text=message)])
